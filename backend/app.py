@@ -1,9 +1,11 @@
 import os
 import requests
-from flask import Flask, request, jsonify
+from flask import Flask, json, request, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
 from openai import OpenAI
+import logging
+logging.basicConfig(level=logging.DEBUG)
 
 load_dotenv()
 
@@ -19,22 +21,34 @@ SCHWAB_THEMES_URL = "https://www.schwab.com/thematic-investing/themes"
 
 @app.route("/api/themes", methods=["GET"])
 def get_themes():
-    page = requests.get(SCHWAB_THEMES_URL).text
-    prompt = f"Extract the list of Charles Schwab thematic investment themes from the following webpage HTML:\n{page}\nReturn them as a plain JSON array of strings."
-
-    headers = {"Authorization": f"Bearer {OPENAI_API_KEY}"}
-    res = requests.post("https://api.openai.com/v1/chat/completions", json={
-        "model": "gpt-4",
-        "messages": [
-            {"role": "user", "content": prompt}
-        ]
-    }, headers=headers)
-
     try:
-        themes = res.json()['choices'][0]['message']['content']
-        return jsonify(eval(themes))
-    except:
-        return jsonify([]), 500
+        # Create a prompt to send to the LLM
+        prompt = (
+            f"Extract the thematic investment themes from the following HTML content of a Charles Schwab webpage:\n\n"
+            f"{SCHWAB_THEMES_URL}\n\n"
+            f"Return the extracted themes as a plain JSON array of strings, with no other text."
+        )
+
+        perplexity_headers = {
+            "Authorization": f"Bearer {PERPLEXITY_API_KEY}",
+            "Content-Type": "application/json"
+        }
+
+        res = requests.post("https://api.perplexity.ai/chat/completions", json={
+            "model": "sonar-pro",
+            "messages": [{"role": "user", "content": prompt}],
+        }, headers=perplexity_headers)
+
+        result = res.json()['choices'][0]['message']['content']
+        if result.startswith("```json") and result.endswith("```"):
+            result = result[7:-3].strip()
+        themes = json.loads(result)  # Ensure JSON safety
+        
+        return jsonify(themes)
+    
+    except Exception as e:
+        logging.exception("Failed to fetch or parse themes")
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/api/stocks", methods=["GET"])
 def get_stocks():
@@ -53,6 +67,9 @@ def get_stocks():
 
     try:
         result = res.json()['choices'][0]['message']['content']
+        if result.startswith("```json") and result.endswith("```"):
+            result = result[7:-3].strip()
+        themes = json.loads(result)  # Ensure JSON safety
         parsed = eval(result)  # Expects {'summary': str, 'stocks': [{name, ticker}]}
         for stock in parsed['stocks']:
             rec = requests.get(f"https://finnhub.io/api/v1/stock/recommendation?symbol={stock['ticker']}&token={FINNHUB_API_KEY}").json()

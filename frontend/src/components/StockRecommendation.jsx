@@ -14,8 +14,8 @@ const getColor = (recommendation) => {
 function StockRecommendation({ stock }) {
   return (
     <div className="flex justify-between items-center p-2 border rounded">
-      <span>{stock.name} ({stock.ticker})</span>
-      <span className={`px-3 py-1 rounded text-white ${getColor(stock.recommendation)}`}>
+      <span>{stock.name} ({stock.ticker}) </span>
+      <span className={`ml-4 px-3 py-1 rounded text-white ${getColor(stock.recommendation)}`}>
         {stock.recommendation}
       </span>
     </div>
